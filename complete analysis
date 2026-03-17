@@ -212,19 +212,18 @@ working_age["edu_level_cat"] = working_age.apply(edu_level_completed, axis=1)
 def get_detailed_status(row):
     status = row["classify1"]
     in_education = (row.get("q07_04") == 3)
+
+    if not in_education and status != "employed":
+        return "NEET"
+    
     if status == "employed":
         return "Employed"
     
     if status == "unemployed":
-        if not in_education:
-            return "NEET"
         return "Unemployed"
+    return "Not in Labor Force"
 
-    if status == "not_in_lf":
-        if not in_education:
-            return "NEET"
-        return "Not in Labor Force"
-    
+# Apply the function
 working_age["labor_status_compare"] = working_age.apply(get_detailed_status, axis=1)
 
 #remittance
@@ -273,7 +272,74 @@ print("\n" + "="*50)
 print("SUMMARY STATS")
 summary_avg = working_age.groupby("labor_status_compare").apply(lambda x: pd.Series({
     "Avg Age": (x["q01_03"] * x["ind_wt"]).sum() / x["ind_wt"].sum(),
-    "Avg child number": (x["hh_children_count"] * x["ind_wt"]).sum() / x["ind_wt"].sum(),
-    "Avg PCEP Consumption": (x["pcep"] * x["ind_wt"]).sum() / x["ind_wt"].sum()}), include_groups=False)
+    "Avg child number": (x["hh_children_count"] * x["ind_wt"]).sum() / x["ind_wt"].sum()}))
 print("\nAverages by Labor Group:")
 print(summary_avg.round(1))
+
+# charts
+import os
+import re
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# style
+sns.set(style="whitegrid")
+plt.rcParams.update({'figure.figsize': (8,5)})
+
+# make plots folder
+os.makedirs("plots", exist_ok=True)
+
+# sanitize file name
+def safe_filename(s):
+    return re.sub(r"[^\w\d\-]", "_", s)
+
+# define columns + friendly titles
+comparison_columns = [
+    ("hh_head_status", "Household Head Status"),
+    ("q01_05", "Marital Status"),
+    ("q01_02", "Gender (Male/Female)"),
+    ("age_bins", "Age Group Comparison"),
+    ("ad_4", "Rural/Urban Split"),
+    ("domain", "Analytical Domain"),
+    ("prov", "Province Comparison"),
+    ("poor", "Poverty Status"),
+    ("pcep_vs_mean", "Consumption vs Mean"),
+    ("pcep_quintile", "Consumption Quintiles"),
+    ("asset_quintile", "Asset Quintiles"),
+    ("remit_status_detailed", "Remittance Status"),
+    ("remittance_quintile", "Remittance Quintile"),
+    ("q07_04", "School Attendance"),
+    ("edu_level_cat", "Education Level"),
+    ("hh_has_child_0_3", "Presence of Kids 0‑3"),
+    ("has_kid_u18", "Presence of Kids <18")]
+
+# define order of labor statuses
+labor_order = ["Employed", "Unemployed", "Not in Labor Force", "NEET"]
+
+# loop and save each chart
+for col, title in comparison_columns:
+    # weighted crosstab
+    cross = pd.crosstab(
+        working_age[col],
+        working_age["labor_status_compare"],
+        values=working_age["ind_wt"],
+        aggfunc='sum'
+    ).fillna(0)
+
+    # convert to percentages
+    cross_pct = cross.div(cross.sum(axis=1), axis=0) * 100
+    cross_pct = cross_pct.reindex(columns=labor_order, fill_value=0)
+
+    # plot grouped bars
+    ax = cross_pct.plot(kind="bar", stacked=False, colormap="Set3")
+    plt.title(f"{title} (%)")
+    plt.ylabel("Percentage")
+    plt.xlabel(title)
+    plt.xticks(rotation=45)
+    plt.legend(title="Labor Status", bbox_to_anchor=(1.02, 1), loc="upper left")
+    plt.tight_layout()
+
+    # save
+    fn = safe_filename(title)
+    plt.savefig(f"plots/{fn}.png")
+    plt.close()
