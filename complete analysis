@@ -409,21 +409,40 @@ comparison_columns = [
     ("school_status", "School Attendance"),
     ("edu_level_cat", "Education Level"),
     ("hh_has_child_0_3", "Presence of Kids 0‑3"),
-    ("has_kid_u18", "Presence of Kids <18")]
+    ("child_app1", "Approach 1 (Head + Spouse, HH has kids)"),
+    ("child_app2", "Approach 2 (Spouse only)"),
+    ("child_app3", "Approach 3 (Spouse + kids <18 strict)")]
+
+fig, ax = plt.subplots(figsize=(8,5))
+age_edu_pct.plot(kind="bar", stacked=True, ax=ax)
+
+ax.set_title("Education Status by Age Group (%)")
+ax.set_ylim(0,100)
+
+plt.xticks(rotation=30)
+plt.tight_layout()
+plt.savefig("neet/education_age.png")
+plt.close()
+
 
 # define order of labor statuses
 labor_order = ["Employed", "Unemployed and in education", "Unemployed and not in education", "Not in Labor force and in education", "Not in Labor force and not in education"]
 nlf_order = ["NLF - In education", "NLF - Unpaid/Subsistence", "NLF - Truly inactive"]
+
+
 for col, title in comparison_columns:
     if col not in working_age.columns:
         continue
+
+    #NLF charts
     nlf_only = working_age[working_age["nlf_detailed"].notna()]
-    
     if not nlf_only.empty:
         cross_nlf = pd.crosstab(nlf_only[col], nlf_only["nlf_detailed"], 
                                 values=nlf_only["ind_wt"], aggfunc='sum').fillna(0)
-        cross_nlf_pct = cross_nlf.div(cross_nlf.sum(axis=1), axis=0) * 100
-        cross_nlf_pct = cross_nlf_pct.reindex(columns=nlf_order, fill_value=0)
+
+        # Reindex rows and columns to ensure missing categories show up
+        cross_nlf = cross_nlf.reindex(index=nlf_only[col].unique(), columns=nlf_order, fill_value=0)
+        cross_nlf_pct = cross_nlf.div(cross_nlf.sum(axis=1).replace(0,1), axis=0) * 100
 
         fig2, ax2 = plt.subplots(figsize=(8,5))
         cross_nlf_pct.plot(kind="bar", stacked=True, colormap="Pastel1", ax=ax2)
@@ -440,44 +459,33 @@ for col, title in comparison_columns:
         ax2.set_ylim(0, 100)
         plt.xticks(rotation=30, ha='right')
         ax2.legend(title="NLF Status", bbox_to_anchor=(1.02, 1), loc="upper left")
-        
         plt.tight_layout()
         fig2.savefig(f"laborforce/NLF_{safe_filename(title)}.png")
         plt.close(fig2)
 
-    cross = pd.crosstab(working_age[col], working_age["labor_status_compare"], values=working_age["ind_wt"], aggfunc='sum').fillna(0)
+    # --- Labor status charts ---
+    cross = pd.crosstab(working_age[col], working_age["labor_status_compare"], 
+                        values=working_age["ind_wt"], aggfunc='sum').fillna(0)
 
-    cross_pct = cross.div(cross.sum(axis=1), axis=0) * 100
-    cross_pct = cross_pct.reindex(columns=labor_order, fill_value=0)
+    # Reindex before normalization to match table exactly
+    cross = cross.reindex(index=working_age[col].unique(), columns=labor_order, fill_value=0)
+    cross_pct = cross.div(cross.sum(axis=1).replace(0,1), axis=0) * 100
+
     fig, ax = plt.subplots(figsize=(8,5))
-
     cross_pct.plot(kind="bar", stacked=True, colormap="Set3", ax=ax)
 
     for container in ax.containers:
         for bar in container:
             height = bar.get_height()
             if height > 3:
-                ax.text(
-                    bar.get_x() + bar.get_width() / 2,
-                    bar.get_y() + height / 2,
-                    f"{height:.0f}%",
-                    ha='center',
-                    va='center',
-                    fontsize=8
-                )
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_y() + height/2,
+                        f"{height:.0f}%", ha='center', va='center', fontsize=8)
 
-    ax.set_title(f"{title} (%)")
+    ax.set_title(f"Labor Status: {title} (%)")
     ax.set_ylabel("Percentage (%)")
-    ax.set_xlabel(title)
     ax.set_ylim(0, 100)
-
     plt.xticks(rotation=30, ha='right')
     ax.legend(title="Labor Status", bbox_to_anchor=(1.02, 1), loc="upper left")
-
     plt.tight_layout()
-
-    # save each plot
-    fn = safe_filename(title)
-    fig.savefig(f"laborforce/{fn}.png")
-
+    fig.savefig(f"laborforce/Labor_{safe_filename(title)}.png")
     plt.close(fig)
