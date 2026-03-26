@@ -289,10 +289,9 @@ print_row_comparison(working_age, "edu_level_cat", "Education Level")
 print("\n[Education and Age]")
 print(age_edu_pct.round(1))
 print_row_comparison(working_age, "hh_has_child_0_3", "Presence of Kids 0-3")
-print("\nIndividuals likely to have children:")
-print(f"Approach 1 (Head + Spouse, HH has kids): {percentage1:.1f}%")
-print(f"Approach 2 (Spouse only): {percentage2:.1f}%")
-print(f"Approach 3 (Spouse + kids <18 strict): {percentage3:.1f}%")
+print_row_comparison(working_age, "child_app1", "Approach 1 Flag")
+print_row_comparison(working_age, "child_app2", "Approach 2 Flag")
+print_row_comparison(working_age, "child_app3", "Approach 3 Flag")
 
 # AVERAGES & SPECIALS
 print("\n" + "="*50)
@@ -300,12 +299,7 @@ print("SUMMARY STATS")
 def weighted_avg_children(df, flag_col):
     return ((df[flag_col].astype(int) * df["hh_children_count"]) * df["ind_wt"]).sum() / df["ind_wt"].sum()
 
-summary_avg_corrected = working_age.groupby("labor_status_compare").apply(lambda x: pd.Series({
-    "Avg Age": (x["q01_03"] * x["ind_wt"]).sum() / x["ind_wt"].sum(),
-    "Avg child number (hh_children_count)": (x["hh_children_count"] * x["ind_wt"]).sum() / x["ind_wt"].sum(),
-    "Avg child number (Approach1)": weighted_avg_children(x, "child_app1"),
-    "Avg child number (Approach2)": weighted_avg_children(x, "child_app2"),
-    "Avg child number (Approach3)": weighted_avg_children(x, "child_app3")}))
+summary_avg_corrected = working_age.groupby("labor_status_compare").apply(lambda x: pd.Series({"Avg Age": (x["q01_03"] * x["ind_wt"]).sum() / x["ind_wt"].sum()}))
 print(summary_avg_corrected.round(1))
 
 #not in labor force comparsio
@@ -356,22 +350,15 @@ print_nlf_comparison(working_age, "edu_level_cat", "Education Level")
 print("\n[Education and Age]")
 print(age_edu_pct.round(1))
 print_nlf_comparison(working_age, "hh_has_child_0_3", "Presence of Kids 0-3")
-print("\nIndividuals likely to have children:")
-print(f"Approach 1 (Head + Spouse, HH has kids): {percentage1:.1f}%")
-print(f"Approach 2 (Spouse only): {percentage2:.1f}%")
-print(f"Approach 3 (Spouse + kids <18 strict): {percentage3:.1f}%")
+print_nlf_comparison(working_age, "child_app1", "Approach 1 Flag")
+print_nlf_comparison(working_age, "child_app2", "Approach 2 Flag")
+print_nlf_comparison(working_age, "child_app3", "Approach 3 Flag")
 
 # AVERAGES & SPECIALS
 print("\n" + "="*50)
 print("SUMMARY STATS")
 
-summary_avg_corrected = working_age.groupby("nlf_detailed").apply(lambda x: pd.Series({
-    "Avg Age": (x["q01_03"] * x["ind_wt"]).sum() / x["ind_wt"].sum(),
-    "Avg child number (hh_children_count)": (x["hh_children_count"] * x["ind_wt"]).sum() / x["ind_wt"].sum(),
-    "Avg child number (Approach1)": weighted_avg_children(x, "child_app1"),
-    "Avg child number (Approach2)": weighted_avg_children(x, "child_app2"),
-    "Avg child number (Approach3)": weighted_avg_children(x, "child_app3")
-}))
+summary_avg_corrected = working_age.groupby("nlf_detailed").apply(lambda x: pd.Series({"Avg Age": (x["q01_03"] * x["ind_wt"]).sum() / x["ind_wt"].sum()}))
 print(summary_avg_corrected.round(1))
 
 # charts
@@ -408,7 +395,7 @@ comparison_columns = [
     ("nepal_quintile", "Nepal Remittance Quintile"),
     ("school_status", "School Attendance"),
     ("edu_level_cat", "Education Level"),
-    ("hh_has_child_0_3", "Presence of Kids 0‑3"),
+    ("hh_has_child_0_3", "Presence of Kids 0-3"),
     ("child_app1", "Approach 1 (Head + Spouse, HH has kids)"),
     ("child_app2", "Approach 2 (Spouse only)"),
     ("child_app3", "Approach 3 (Spouse + kids <18 strict)")]
