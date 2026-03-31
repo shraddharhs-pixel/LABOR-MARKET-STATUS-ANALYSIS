@@ -361,7 +361,20 @@ print("SUMMARY STATS")
 summary_avg_corrected = working_age.groupby("nlf_detailed").apply(lambda x: pd.Series({"Avg Age": (x["q01_03"] * x["ind_wt"]).sum() / x["ind_wt"].sum()}))
 print(summary_avg_corrected.round(1))
 
-# charts
+
+
+
+def get_ordered_categories(series):
+    if pd.api.types.is_categorical_dtype(series):
+        return series.cat.categories
+    elif pd.api.types.is_numeric_dtype(series):
+        return sorted(series.dropna().unique())
+    else:
+        return sorted(series.dropna().unique())
+    
+
+
+# charts-----------------------------------------------
 import os
 import re
 import matplotlib.pyplot as plt
@@ -428,7 +441,8 @@ for col, title in comparison_columns:
                                 values=nlf_only["ind_wt"], aggfunc='sum').fillna(0)
 
         # Reindex rows and columns to ensure missing categories show up
-        cross_nlf = cross_nlf.reindex(index=nlf_only[col].unique(), columns=nlf_order, fill_value=0)
+        row_order = get_ordered_categories(nlf_only[col])
+        cross_nlf = cross_nlf.reindex(index=row_order, columns=nlf_order, fill_value=0)
         cross_nlf_pct = cross_nlf.div(cross_nlf.sum(axis=1).replace(0,1), axis=0) * 100
 
         fig2, ax2 = plt.subplots(figsize=(8,5))
@@ -451,11 +465,13 @@ for col, title in comparison_columns:
         plt.close(fig2)
 
     # --- Labor status charts ---
-    cross = pd.crosstab(working_age[col], working_age["labor_status_compare"], 
-                        values=working_age["ind_wt"], aggfunc='sum').fillna(0)
+    plot_df = working_age[working_age[col].notna()].copy()
+    cross = pd.crosstab(plot_df[col], plot_df["labor_status_compare"], 
+                    values=plot_df["ind_wt"], aggfunc='sum').fillna(0)
 
     # Reindex before normalization to match table exactly
-    cross = cross.reindex(index=working_age[col].unique(), columns=labor_order, fill_value=0)
+    row_order = get_ordered_categories(working_age[col])
+    cross = cross.reindex(index=row_order, columns=labor_order, fill_value=0)
     cross_pct = cross.div(cross.sum(axis=1).replace(0,1), axis=0) * 100
 
     fig, ax = plt.subplots(figsize=(8,5))
@@ -476,3 +492,86 @@ for col, title in comparison_columns:
     plt.tight_layout()
     fig.savefig(f"laborforce/Labor_{safe_filename(title)}.png")
     plt.close(fig)
+
+
+
+#cross check
+# 1. Filter for only those Not in the Labor Force
+nlf_only = working_age[working_age["nlf_detailed"].notna()].copy()
+
+# 2. Create the Gender Cross-tab (Female vs Male)
+gender_cross = pd.crosstab(
+    index=nlf_only["q01_02"], 
+    columns=nlf_only["nlf_detailed"], 
+    values=nlf_only["ind_wt"], 
+    aggfunc='sum'
+).fillna(0)
+
+# 3. Calculate the "Total" (Combined) distribution
+total_weights = nlf_only.groupby("nlf_detailed")["ind_wt"].sum()
+total_row = (total_weights / total_weights.sum() * 100).reindex(nlf_order)
+
+# 4. Normalize the Gender data to percentages and add the Total row
+gender_pct = (gender_cross.div(gender_cross.sum(axis=1), axis=0) * 100).reindex(columns=nlf_order)
+gender_pct.loc['Total'] = total_row
+
+# 5. Plotting
+fig, ax = plt.subplots(figsize=(10, 6))
+gender_pct.plot(kind="bar", stacked=True, colormap="Pastel1", ax=ax)
+
+# Add data labels
+for container in ax.containers:
+    ax.bar_label(container, fmt='%.0f%%', label_type='center', fontsize=10)
+
+ax.set_title("NLF Detail: Gender vs Total (%)")
+ax.set_ylabel("Percentage (%)")
+ax.set_ylim(0, 110) # Extra room for the legend
+plt.xticks(rotation=0) # Keeps 'Female', 'Male', 'Total' horizontal
+ax.legend(title="NLF Status", bbox_to_anchor=(1.05, 1), loc='upper left')
+
+plt.tight_layout()
+plt.show()
+
+# Print the table for your reference
+print("\n--- NLF Comparison Table (Including Total) ---")
+print(gender_pct.round(1))
+
+# --- LABOR STATUS GENDER VS TOTAL ---
+
+# 1. Prepare Labor Data (weighted sum by gender)
+labor_cross = pd.crosstab(
+    index=working_age["q01_02"], 
+    columns=working_age["labor_status_compare"], 
+    values=working_age["ind_wt"], 
+    aggfunc='sum'
+).fillna(0)
+
+# 2. Calculate the "Total" (Combined) distribution for Labor Status
+labor_total_w = working_age.groupby("labor_status_compare")["ind_wt"].sum()
+labor_total_row = (labor_total_w / labor_total_w.sum() * 100).reindex(labor_order)
+
+# 3. Normalize Gender data and append Total
+labor_gender_pct = (labor_cross.div(labor_cross.sum(axis=1), axis=0) * 100).reindex(columns=labor_order)
+labor_gender_pct.loc['Total'] = labor_total_row
+
+# 4. Plotting Labor Status: Gender vs Total
+fig3, ax3 = plt.subplots(figsize=(10, 6))
+labor_gender_pct.plot(kind="bar", stacked=True, colormap="Set3", ax=ax3)
+
+# Add data labels
+for container in ax3.containers:
+    ax3.bar_label(container, fmt='%.0f%%', label_type='center', fontsize=9)
+
+ax3.set_title("Labor Status: Gender vs Total (%)")
+ax3.set_ylabel("Percentage (%)")
+ax3.set_ylim(0, 115) 
+plt.xticks(rotation=0)
+ax3.legend(title="Labor Status", bbox_to_anchor=(1.05, 1), loc='upper left')
+
+plt.tight_layout()
+plt.savefig("laborforce/Labor_Gender_With_Total.png") # Saves the specific combined chart
+plt.show()
+
+# Print Table for reference
+print("\n--- Labor Status Table (Including Total) ---")
+print(labor_gender_pct.round(1))
